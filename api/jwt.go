@@ -112,9 +112,9 @@ func jwtGinMiddleware(secretKey string) (*jwt.GinJWTMiddleware, error) {
 		//	return false
 		//},
 		Unauthorized: func(c *gin.Context, code int, message string) {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"code":    code,
-				"message": message,
+			c.JSON(http.StatusOK, gin.H{
+				"code":    401,
+				"msg":     message,
 				"success": false,
 			})
 		},
