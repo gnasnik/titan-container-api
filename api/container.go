@@ -1,8 +1,6 @@
 package api
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	ctypes "github.com/Filecoin-Titan/titan-container/api/types"
 	jwt "github.com/appleboy/gin-jwt/v2"
@@ -11,9 +9,6 @@ import (
 	"github.com/gnasnik/titan-container-api/config"
 	"github.com/gnasnik/titan-container-api/core/errors"
 	"github.com/gnasnik/titan-container-api/core/generated/model"
-	//"github.com/gnasnik/titan-container-api/core/geo"
-	"golang.org/x/xerrors"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -203,7 +198,7 @@ func CreateDeploymentHandler(c *gin.Context) {
 	err = createDeploymentsJsonRPC(url, deployment)
 	if err != nil {
 		if strings.Contains(err.Error(), "invalid") {
-			c.JSON(http.StatusOK, respError(errors.ErrInvalidParams))
+			c.JSON(http.StatusOK, respError(errors.ErrInvalidDeploymentName))
 			return
 		}
 
@@ -489,404 +484,79 @@ func GetDeploymentShellHandler(c *gin.Context) {
 	}))
 }
 
-func getProvidersJsonRPC(url string, opt ctypes.GetProviderOption) ([]*ctypes.Provider, error) {
-	params, err := json.Marshal([]interface{}{opt})
+func GetIngressHandler(c *gin.Context) {
+	claims := jwt.ExtractClaims(c)
+	username := claims[identityKey].(string)
+
+	url := config.Cfg.ContainerManager.Addr
+	deploymentId := c.Query("id")
+
+	dparam := ctypes.GetDeploymentOption{
+		Owner:        username,
+		DeploymentID: ctypes.DeploymentID(deploymentId),
+	}
+
+	resp, err := getDeploymentsJsonRPC(url, dparam)
 	if err != nil {
-		return nil, err
+		log.Errorf("get providers: %v", err)
+		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		return
 	}
 
-	req := model.LotusRequest{
-		Jsonrpc: "2.0",
-		Method:  "titan.GetProviderList",
-		Params:  params,
-		ID:      1,
+	if resp.Deployments[0].Owner != username {
+		c.JSON(http.StatusOK, respError(errors.ErrPermissionNotAllowed))
+		return
 	}
 
-	rsp, err := requestJsonRPC(url, req)
+	ingress, err := getIngressJsonRPC(url, ctypes.DeploymentID(deploymentId))
 	if err != nil {
-		return nil, err
+		log.Errorf("get events: %v", err)
+		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		return
 	}
 
-	var providers []*ctypes.Provider
-	b, err := json.Marshal(rsp.Result)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(b, &providers)
-	if err != nil {
-		return nil, err
-	}
-
-	return providers, nil
+	c.JSON(http.StatusOK, respJSON(JsonObject{
+		"ingress": ingress,
+	}))
 }
 
-func getProviderStatisticJsonRPC(url string, id ctypes.ProviderID) (*ctypes.ResourcesStatistics, error) {
-	params, err := json.Marshal([]interface{}{id})
+func UpdateIngressHandler(c *gin.Context) {
+	claims := jwt.ExtractClaims(c)
+	username := claims[identityKey].(string)
+
+	url := config.Cfg.ContainerManager.Addr
+	deploymentId := c.Query("id")
+
+	var ingress ctypes.Ingress
+	if err := c.Bind(&ingress); err != nil {
+		log.Errorf("err", err)
+		c.JSON(http.StatusOK, respError(errors.ErrInvalidParams))
+		return
+	}
+
+	dparam := ctypes.GetDeploymentOption{
+		Owner:        username,
+		DeploymentID: ctypes.DeploymentID(deploymentId),
+	}
+
+	resp, err := getDeploymentsJsonRPC(url, dparam)
 	if err != nil {
-		return nil, err
+		log.Errorf("get providers: %v", err)
+		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		return
 	}
 
-	req := model.LotusRequest{
-		Jsonrpc: "2.0",
-		Method:  "titan.GetStatistics",
-		Params:  params,
-		ID:      1,
+	if resp.Deployments[0].Owner != username {
+		c.JSON(http.StatusOK, respError(errors.ErrPermissionNotAllowed))
+		return
 	}
 
-	rsp, err := requestJsonRPC(url, req)
+	err = updateIngressJsonRPC(url, ctypes.DeploymentID(deploymentId), ingress.Annotations)
 	if err != nil {
-		return nil, err
+		log.Errorf("get ingress: %v", err)
+		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		return
 	}
 
-	var statistic ctypes.ResourcesStatistics
-	b, err := json.Marshal(rsp.Result)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(b, &statistic)
-	if err != nil {
-		return nil, err
-	}
-
-	return &statistic, nil
-}
-
-func getDeploymentsJsonRPC(url string, opt ctypes.GetDeploymentOption) (*ctypes.GetDeploymentListResp, error) {
-	params, err := json.Marshal([]interface{}{opt})
-	if err != nil {
-		return nil, err
-	}
-
-	req := model.LotusRequest{
-		Jsonrpc: "2.0",
-		Method:  "titan.GetDeploymentList",
-		Params:  params,
-		ID:      1,
-	}
-
-	rsp, err := requestJsonRPC(url, req)
-	if err != nil {
-		return nil, err
-	}
-
-	var out ctypes.GetDeploymentListResp
-	b, err := json.Marshal(rsp.Result)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(b, &out)
-	if err != nil {
-		return nil, err
-	}
-
-	return &out, nil
-}
-
-func createDeploymentsJsonRPC(url string, deployment ctypes.Deployment) error {
-	params, err := json.Marshal([]interface{}{deployment})
-	if err != nil {
-		return err
-	}
-
-	req := model.LotusRequest{
-		Jsonrpc: "2.0",
-		Method:  "titan.CreateDeployment",
-		Params:  params,
-		ID:      1,
-	}
-
-	rsp, err := requestJsonRPC(url, req)
-	if err != nil {
-		return err
-	}
-
-	if rsp.Error != nil {
-		return err
-	}
-
-	return nil
-}
-
-func deleteDeploymentsJsonRPC(url string, deployment ctypes.Deployment) error {
-	params, err := json.Marshal([]interface{}{deployment, true})
-	if err != nil {
-		return err
-	}
-
-	req := model.LotusRequest{
-		Jsonrpc: "2.0",
-		Method:  "titan.CloseDeployment",
-		Params:  params,
-		ID:      1,
-	}
-
-	rsp, err := requestJsonRPC(url, req)
-	if err != nil {
-		return err
-	}
-
-	if rsp.Error != nil {
-		return err
-	}
-
-	return nil
-}
-
-func updateDeploymentsJsonRPC(url string, deployment ctypes.Deployment) error {
-	params, err := json.Marshal([]interface{}{deployment})
-	if err != nil {
-		return err
-	}
-
-	req := model.LotusRequest{
-		Jsonrpc: "2.0",
-		Method:  "titan.UpdateDeployment",
-		Params:  params,
-		ID:      1,
-	}
-
-	rsp, err := requestJsonRPC(url, req)
-	if err != nil {
-		return err
-	}
-
-	if rsp.Error != nil {
-		return err
-	}
-
-	return nil
-}
-
-func getDeploymentLogsJsonRPC(url string, deployment ctypes.Deployment) ([]*ctypes.ServiceLog, error) {
-	params, err := json.Marshal([]interface{}{deployment})
-	if err != nil {
-		return nil, err
-	}
-
-	req := model.LotusRequest{
-		Jsonrpc: "2.0",
-		Method:  "titan.GetLogs",
-		Params:  params,
-		ID:      1,
-	}
-
-	rsp, err := requestJsonRPC(url, req)
-	if err != nil {
-		return nil, err
-	}
-
-	var logs []*ctypes.ServiceLog
-	b, err := json.Marshal(rsp.Result)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(b, &logs)
-	if err != nil {
-		return nil, err
-	}
-
-	return logs, nil
-}
-
-func getDeploymentEventsJsonRPC(url string, deployment ctypes.Deployment) ([]*ctypes.ServiceEvent, error) {
-	params, err := json.Marshal([]interface{}{deployment})
-	if err != nil {
-		return nil, err
-	}
-
-	req := model.LotusRequest{
-		Jsonrpc: "2.0",
-		Method:  "titan.GetEvents",
-		Params:  params,
-		ID:      1,
-	}
-
-	rsp, err := requestJsonRPC(url, req)
-	if err != nil {
-		return nil, err
-	}
-
-	var event []*ctypes.ServiceEvent
-	b, err := json.Marshal(rsp.Result)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(b, &event)
-	if err != nil {
-		return nil, err
-	}
-
-	return event, nil
-}
-
-func getDeploymentDomainJsonRPC(url string, id ctypes.DeploymentID) ([]*ctypes.DeploymentDomain, error) {
-	params, err := json.Marshal([]interface{}{id})
-	if err != nil {
-		return nil, err
-	}
-
-	req := model.LotusRequest{
-		Jsonrpc: "2.0",
-		Method:  "titan.GetDeploymentDomains",
-		Params:  params,
-		ID:      1,
-	}
-
-	rsp, err := requestJsonRPC(url, req)
-	if err != nil {
-		return nil, err
-	}
-
-	var domains []*ctypes.DeploymentDomain
-	b, err := json.Marshal(rsp.Result)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(b, &domains)
-	if err != nil {
-		return nil, err
-	}
-
-	return domains, nil
-}
-
-func addDeploymentDomainJsonRPC(url string, id ctypes.DeploymentID, cert *ctypes.Certificate) error {
-	params, err := json.Marshal([]interface{}{id, cert})
-	if err != nil {
-		return err
-	}
-
-	req := model.LotusRequest{
-		Jsonrpc: "2.0",
-		Method:  "titan.AddDeploymentDomain",
-		Params:  params,
-		ID:      1,
-	}
-
-	rsp, err := requestJsonRPC(url, req)
-	if err != nil {
-		return err
-	}
-
-	var domains []*ctypes.DeploymentDomain
-	b, err := json.Marshal(rsp.Result)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(b, &domains)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func deleteDeploymentDomainJsonRPC(url string, id ctypes.DeploymentID, host string) error {
-	params, err := json.Marshal([]interface{}{id, host})
-	if err != nil {
-		return err
-	}
-
-	req := model.LotusRequest{
-		Jsonrpc: "2.0",
-		Method:  "titan.DeleteDeploymentDomain",
-		Params:  params,
-		ID:      1,
-	}
-
-	rsp, err := requestJsonRPC(url, req)
-	if err != nil {
-		return err
-	}
-
-	var domains []*ctypes.DeploymentDomain
-	b, err := json.Marshal(rsp.Result)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(b, &domains)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func getDeploymentShellJsonRPC(url string, id ctypes.DeploymentID) (*ctypes.ShellEndpoint, error) {
-	params, err := json.Marshal([]interface{}{id})
-	if err != nil {
-		return nil, err
-	}
-
-	req := model.LotusRequest{
-		Jsonrpc: "2.0",
-		Method:  "titan.GetDeploymentShellEndpoint",
-		Params:  params,
-		ID:      1,
-	}
-
-	rsp, err := requestJsonRPC(url, req)
-	if err != nil {
-		return nil, err
-	}
-
-	var endpoint ctypes.ShellEndpoint
-	b, err := json.Marshal(rsp.Result)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(b, &endpoint)
-	if err != nil {
-		return nil, err
-	}
-
-	return &endpoint, nil
-}
-
-func requestJsonRPC(url string, req model.LotusRequest) (*model.LotusResponse, error) {
-	jsonData, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-	request, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, err
-	}
-
-	token := config.Cfg.ContainerManager.Token
-	request.Header.Add("Content-Type", "application/json")
-	request.Header.Add("Authorization", "Bearer "+token)
-	resp, err := http.DefaultClient.Do(request)
-	//resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
-	//if err != nil {
-	//	return nil, err
-	//}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	fmt.Println(string(body))
-
-	var rsp model.LotusResponse
-	err = json.Unmarshal(body, &rsp)
-	if err != nil {
-		return nil, err
-	}
-
-	if rsp.Error != nil {
-		return nil, xerrors.New(rsp.Error.Message)
-	}
-
-	return &rsp, nil
+	c.JSON(http.StatusOK, respJSON(nil))
 }

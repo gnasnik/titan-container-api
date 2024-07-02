@@ -11,18 +11,20 @@ const (
 	InvalidPassword
 	InternalServer
 	PermissionNotAllowed
+	InvalidDeploymentName
 
 	Unknown = -1
 )
 
 var (
-	ErrUnknown              = newError(Unknown, "Unknown Error")
-	ErrNotFound             = newError(NotFound, "Record Not Found")
-	ErrInvalidParams        = newError(InvalidParams, "Invalid Params")
-	ErrUserNotFound         = newError(UserNotFound, "user not found")
-	ErrInvalidPassword      = newError(InvalidPassword, "invalid password")
-	ErrInternalServer       = newError(InternalServer, "Server Busy")
-	ErrPermissionNotAllowed = newError(PermissionNotAllowed, "Permission Not Allowed")
+	ErrUnknown               = newError(Unknown, "Unknown Error")
+	ErrNotFound              = newError(NotFound, "Record Not Found")
+	ErrInvalidParams         = newError(InvalidParams, "Invalid Params")
+	ErrUserNotFound          = newError(UserNotFound, "user not found")
+	ErrInvalidPassword       = newError(InvalidPassword, "invalid password")
+	ErrInternalServer        = newError(InternalServer, "Server Busy")
+	ErrPermissionNotAllowed  = newError(PermissionNotAllowed, "Permission Not Allowed")
+	ErrInvalidDeploymentName = newError(InvalidDeploymentName, "invalid deployment name")
 )
 
 type ApiError struct {

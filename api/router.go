@@ -47,6 +47,8 @@ func ServerAPI(cfg *config.Config) {
 	container.POST("/deployment/domain/add", AddDeploymentDomainHandler)
 	container.POST("/deployment/domain/del", DeleteDeploymentDomainHandler)
 	container.GET("/deployment/shell", GetDeploymentShellHandler)
+	container.GET("/ingress", GetIngressHandler)
+	container.POST("/ingress/update", UpdateIngressHandler)
 
 	if err := r.Run(cfg.ApiListen); err != nil {
 		log.Fatalf("starting server: %v\n", err)

@@ -25,6 +25,6 @@ func respError(e error) gin.H {
 	return gin.H{
 		"success": false,
 		"code":    apiError.Code(),
-		"message": apiError.Error(),
+		"msg":     apiError.Error(),
 	}
 }
