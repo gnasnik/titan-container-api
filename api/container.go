@@ -349,10 +349,10 @@ func AddDeploymentDomainHandler(c *gin.Context) {
 	username := claims[identityKey].(string)
 
 	type domainReq struct {
-		ID   ctypes.DeploymentID
-		Host string
-		Key  string
-		Cert string
+		ID          ctypes.DeploymentID
+		Hostname    string
+		PrivateKey  string
+		Certificate string
 	}
 
 	var params domainReq
@@ -364,7 +364,7 @@ func AddDeploymentDomainHandler(c *gin.Context) {
 
 	dparam := ctypes.GetDeploymentOption{
 		Owner:        username,
-		DeploymentID: ctypes.DeploymentID(params.ID),
+		DeploymentID: params.ID,
 	}
 
 	resp, err := getDeploymentsJsonRPC(url, dparam)
@@ -383,14 +383,11 @@ func AddDeploymentDomainHandler(c *gin.Context) {
 		c.JSON(http.StatusOK, respError(errors.ErrPermissionNotAllowed))
 		return
 	}
-	//
-	//host := strings.Trim(params.Host, "https://")
-	//host = strings.Trim(host, "http://")
 
 	cert := &ctypes.Certificate{
-		Host: params.Host,
-		Key:  []byte(params.Key),
-		Cert: []byte(params.Cert),
+		Hostname:    params.Hostname,
+		PrivateKey:  []byte(params.PrivateKey),
+		Certificate: []byte(params.Certificate),
 	}
 
 	err = addDeploymentDomainJsonRPC(url, params.ID, cert)

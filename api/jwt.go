@@ -7,9 +7,6 @@ import (
 	"github.com/gnasnik/titan-container-api/core/dao"
 	"github.com/gnasnik/titan-container-api/core/errors"
 	"github.com/gnasnik/titan-container-api/core/generated/model"
-	"github.com/gnasnik/titan-container-api/core/logger"
-	"github.com/gnasnik/titan-container-api/utils"
-	"github.com/mssola/user_agent"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"time"
@@ -75,32 +72,11 @@ func jwtGinMiddleware(secretKey string) (*jwt.GinJWTMiddleware, error) {
 			}
 			userID := loginParams.Username
 			password := loginParams.Password
-			userAgent := c.Request.Header.Get("User-Agent")
-			ua := user_agent.New(userAgent)
-			os := ua.OS()
-			explorer, _ := ua.Browser()
-			clientIP := utils.GetClientIP(c.Request)
-			location := utils.GetLocationByIP(clientIP)
-
-			loginLog := &model.LoginLog{
-				Ipaddr:        clientIP,
-				Browser:       explorer,
-				Os:            os,
-				LoginLocation: location,
-			}
 
 			user, err := loginByPassword(c.Request.Context(), userID, password)
 			if err != nil {
-				loginLog.Status = loginStatusFailure
-				loginLog.Msg = err.Error()
-				logger.AddLoginLog(loginLog)
 				return nil, err
 			}
-
-			loginLog.LoginUsername = userID
-			loginLog.Status = loginStatusSuccess
-			loginLog.Msg = "success"
-			logger.AddLoginLog(loginLog)
 
 			return user, nil
 		},
