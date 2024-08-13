@@ -8,6 +8,23 @@ import (
 	"time"
 )
 
+// deployments
+type Deployment struct {
+	ID         string    `db:"id" json:"id"`
+	Owner      string    `db:"owner" json:"owner"`
+	Name       string    `db:"name" json:"name"`
+	State      int32     `db:"state" json:"state"`
+	Type       int32     `db:"type" json:"type"`
+	Authority  bool      `db:"authority" json:"authority"`
+	Version    string    `db:"version" json:"version"`
+	Balance    float64   `db:"balance" json:"balance"`
+	Cost       float64   `db:"cost" json:"cost"`
+	ProviderID string    `db:"provider_id" json:"provider_id"`
+	Expiration time.Time `db:"expiration" json:"expiration"`
+	CreatedAt  time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt  time.Time `db:"updated_at" json:"updated_at"`
+}
+
 type LocationCn struct {
 	ID        int64     `db:"id" json:"id"`
 	Ip        string    `db:"ip" json:"ip"`
@@ -40,6 +57,21 @@ type LocationEn struct {
 	Elevation string    `db:"elevation" json:"elevation"`
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
+}
+
+// providers
+type ProviderWithResource struct {
+	ID         string    `db:"id" json:"id"`
+	Owner      string    `db:"owner" json:"owner"`
+	AreaID     string    `db:"area_id" json:"area_id"`
+	RemoteAddr string    `db:"remote_addr" json:"remote_addr"`
+	Ip         string    `db:"ip" json:"ip"`
+	State      int32     `db:"state" json:"state"`
+	Cpu        string    `db:"cpu" json:"cpu"`
+	Gpu        string    `db:"gpu" json:"gpu"`
+	Memory     string    `db:"memory" json:"memory"`
+	Storage    string    `db:"storage" json:"storage"`
+	CreatedAt  time.Time `db:"created_at" json:"created_at"`
 }
 
 type User struct {

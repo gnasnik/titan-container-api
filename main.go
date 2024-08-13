@@ -33,7 +33,12 @@ func main() {
 		log.Fatalf("initital: %v\n", err)
 	}
 
-	go api.ServerAPI(&cfg)
+	srv, err := api.NewServer(cfg)
+	if err != nil {
+		log.Fatalf("failed to create api server, %v", err)
+	}
+
+	go srv.Run()
 
 	signal.Notify(OsSignal, syscall.SIGINT, syscall.SIGTERM)
 	_ = <-OsSignal

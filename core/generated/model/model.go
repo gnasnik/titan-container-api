@@ -65,3 +65,25 @@ type Location struct {
 	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
 	CountryCode string    `db:"-" json:"country_code"`
 }
+
+type QueryOption struct {
+	ID     string
+	UserID string
+	Page   int
+	Size   int
+}
+
+//type ProviderWithResource struct {
+//	ID string `json:"id" db:"id"`
+//	Owner
+//	IP         string    `json:"ip" db:"ip"`
+//	State      int64     `json:"state" db:"state"`
+//	RemoteAddr string    `json:"remote_addr" db:"remote_addr"`
+//	CPU        string    `json:"cpu" db:"cpu"`
+//	GPU        string    `json:"gpu" db:"gpu"`
+//	Memory     string    `json:"memory" db:"memory"`
+//	Storage    string    `json:"storage" db:"storage"`
+//	Region     string    `json:"region" db:"region"`
+//	AreaId     string    `json:"area_id" db:"area_id"`
+//	CreatedAt  time.Time `json:"created_at" db:"created_at"`
+//}

@@ -3,17 +3,9 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/gnasnik/titan-container-api/config"
-	logging "github.com/ipfs/go-log/v2"
 )
 
-var log = logging.Logger("api")
-
-func ServerAPI(cfg *config.Config) {
-	gin.SetMode(cfg.Mode)
-	r := gin.Default()
-	r.Use(Cors())
-	r.Use(RequestLoggerMiddleware())
-
+func RegisterRouter(r *gin.Engine, cfg config.Config) {
 	apiV1 := r.Group("/api/v1")
 	authMiddleware, err := jwtGinMiddleware(cfg.SecretKey)
 	if err != nil {
@@ -35,6 +27,7 @@ func ServerAPI(cfg *config.Config) {
 
 	container := apiV1.Group("/container")
 	container.Use(authMiddleware.MiddlewareFunc())
+	container.GET("/areas", GetAreasHandler)
 	container.GET("/providers", GetProvidersHandler)
 	container.GET("/deployments", GetDeploymentsHandler)
 	container.GET("/deployment/manifest", GetDeploymentManifestHandler)
@@ -50,7 +43,4 @@ func ServerAPI(cfg *config.Config) {
 	container.GET("/ingress", GetIngressHandler)
 	container.POST("/ingress/update", UpdateIngressHandler)
 
-	if err := r.Run(cfg.ApiListen); err != nil {
-		log.Fatalf("starting server: %v\n", err)
-	}
 }

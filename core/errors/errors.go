@@ -12,6 +12,7 @@ const (
 	InternalServer
 	PermissionNotAllowed
 	InvalidDeploymentName
+	NoAvailableScheduler
 
 	Unknown = -1
 )
@@ -25,6 +26,7 @@ var (
 	ErrInternalServer        = newError(InternalServer, "Server Busy")
 	ErrPermissionNotAllowed  = newError(PermissionNotAllowed, "Permission Not Allowed")
 	ErrInvalidDeploymentName = newError(InvalidDeploymentName, "invalid deployment name")
+	ErrNoAvailableScheduler  = newError(NoAvailableScheduler, "no available scheduler")
 )
 
 type ApiError struct {

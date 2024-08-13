@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"github.com/gin-gonic/gin"
 	err "github.com/gnasnik/titan-container-api/core/errors"
 	"github.com/pkg/errors"
@@ -26,5 +27,18 @@ func respError(e error) gin.H {
 		"success": false,
 		"code":    apiError.Code(),
 		"msg":     apiError.Error(),
+	}
+}
+
+func respErrorWrapMessage(e error, msg string) gin.H {
+	var apiError err.ApiError
+	if !errors.As(e, &apiError) {
+		apiError = err.ErrUnknown
+	}
+
+	return gin.H{
+		"success": false,
+		"code":    apiError.Code(),
+		"msg":     fmt.Sprintf("error: %s", msg),
 	}
 }

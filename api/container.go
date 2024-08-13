@@ -1,12 +1,13 @@
 package api
 
 import (
+	"context"
 	"fmt"
-	ctypes "github.com/Filecoin-Titan/titan-container/api/types"
+	ctypes "github.com/Filecoin-Titan/titan/api/types"
 	jwt "github.com/appleboy/gin-jwt/v2"
 	"github.com/docker/go-units"
 	"github.com/gin-gonic/gin"
-	"github.com/gnasnik/titan-container-api/config"
+	"github.com/gnasnik/titan-container-api/core/dao"
 	"github.com/gnasnik/titan-container-api/core/errors"
 	"github.com/gnasnik/titan-container-api/core/generated/model"
 	"net/http"
@@ -14,145 +15,206 @@ import (
 	"strings"
 )
 
-func GetProvidersHandler(c *gin.Context) {
-	url := config.Cfg.ContainerManager.Addr
-	page, _ := strconv.ParseInt(c.Query("page"), 10, 64)
-	size, _ := strconv.ParseInt(c.Query("size"), 10, 64)
+func GetAreasHandler(c *gin.Context) {
+	areaIds := []string{"ALL"}
 
-	params := ctypes.GetProviderOption{
-		State: []ctypes.ProviderState{ctypes.ProviderStateOnline, ctypes.ProviderStateOffline, ctypes.ProviderStateAbnormal},
-		Page:  int(page),
-		Size:  int(size),
-	}
-
-	providers, err := getProvidersJsonRPC(url, params)
-	if err != nil {
-		log.Errorf("get providers: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
-		return
-	}
-
-	type result struct {
-		ID      string `json:"id"`
-		IP      string `json:"ip"`
-		State   string `json:"state"`
-		Host    string `json:"host"`
-		CPU     string `json:"cpu"`
-		Memory  string `json:"memory"`
-		Storage string `json:"storage"`
-		Region  string `json:"region"`
-	}
-
-	res := make([]result, 0)
-	for _, provider := range providers {
-		resource, err := getProviderStatisticJsonRPC(url, provider.ID)
-		if err != nil {
-			log.Errorf("get statistic %s: %v", provider.ID, err)
-			continue
-		}
-
-		//location, err := geo.GetIpLocation(c.Request.Context(), provider.IP)
-		//if err != nil {
-		//	log.Errorf("get location: %v", err)
-		//}
-
-		//if location == nil {
-		//	location = &model.Location{}
-		//}
-
-		location := &model.Location{}
-
-		res = append(res, result{
-			ID:      string(provider.ID),
-			IP:      provider.IP,
-			State:   ctypes.ProviderStateString(provider.State),
-			Host:    provider.HostURI,
-			CPU:     fmt.Sprintf("%.1f/%.1f", resource.CPUCores.Available, resource.CPUCores.MaxCPUCores),
-			Memory:  fmt.Sprintf("%s/%s", units.BytesSize(float64(resource.Memory.Available)), units.BytesSize(float64(resource.Memory.MaxMemory))),
-			Storage: fmt.Sprintf("%s/%s", units.BytesSize(float64(resource.Storage.Available)), units.BytesSize(float64(resource.Storage.MaxStorage))),
-			Region:  fmt.Sprintf("%s %s", location.Country, location.City),
-		})
+	for _, scheduler := range GlobalServer.GetSchedulers() {
+		areaIds = append(areaIds, scheduler.AreaId)
 	}
 
 	c.JSON(http.StatusOK, respJSON(JsonObject{
-		"providers": res,
+		"area_ids": areaIds,
 	}))
+}
+
+func GetProvidersHandler(c *gin.Context) {
+	areaId := c.Query("area_id")
+	page, _ := strconv.ParseInt(c.Query("page"), 10, 64)
+	size, _ := strconv.ParseInt(c.Query("size"), 10, 64)
+
+	total, providers, err := dao.GetProvidersWithResource(c.Request.Context(), areaId, model.QueryOption{Page: int(page), Size: int(size)})
+	if err != nil {
+		log.Errorf("GetProvidersWithResource: %v", err)
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, respJSON(JsonObject{
+		"total":     total,
+		"providers": providers,
+	}))
+	return
+
+	//option := &ctypes.GetProviderOption{
+	//	State: []ctypes.ProviderState{ctypes.ProviderStateOnline},
+	//	Page:  int(page),
+	//	Size:  int(size),
+	//}
+
+	//scheduler, err := GetSchedulerByAreaId(areaId)
+	//if err != nil {
+	//	c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+	//	return
+	//}
+	//
+	//response, err := scheduler.Api.GetProviderList(c.Request.Context(), option)
+	//if err != nil {
+	//	c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+	//	return
+	//}
+	//
+	//out, err := syncQueryResource(context.Background(), scheduler, response)
+	//if err != nil {
+	//	c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+	//	return
+	//}
+	//
+	//total := len(response)
+	//if int64(total) > size {
+	//	total = 50
+	//}
+	//
+	//sort.Slice(out, func(i, j int) bool {
+	//	return out[i].ID > out[j].ID
+	//})
+	//
+	//c.JSON(http.StatusOK, respJSON(JsonObject{
+	//	"total":     total,
+	//	"providers": out,
+	//}))
+	//return
+
+	//res := make([]result, 0)
+	//
+	//for _, provider := range response {
+	//	//if provider.ResourcesStatistics != nil {
+	//	//	resource = provider.ResourcesStatistics
+	//	//}
+	//
+	//	//r := result{
+	//	//	ID:         string(provider.ID),
+	//	//	IP:         provider.IP,
+	//	//	State:      ctypes.ProviderStateString(provider.State),
+	//	//	RemoteAddr: provider.RemoteAddr,
+	//	//}
+	//
+	//	//go func(res *result) {
+	//	//	resource, err := scheduler.Api.GetStatistics(context.Background(), provider.ID)
+	//	//	if err != nil {
+	//	//		log.Errorf("get statistics: %v", err)
+	//	//	}
+	//	//	res.CPU = fmt.Sprintf("%.1f/%.1f", resource.CPUCores.Available, resource.CPUCores.MaxCPUCores)
+	//	//	res.Memory = fmt.Sprintf("%s/%s", units.BytesSize(float64(resource.Memory.Available)), units.BytesSize(float64(resource.Memory.MaxMemory)))
+	//	//	res.Storage = fmt.Sprintf("%s/%s", units.BytesSize(float64(resource.Storage.Available)), units.BytesSize(float64(resource.Storage.MaxStorage)))
+	//	//
+	//	//	ch <- res
+	//	//}(&r)
+	//
+	//	resource, err := scheduler.Api.GetStatistics(context.Background(), provider.ID)
+	//	if err != nil {
+	//		log.Errorf("get statistics: %v", err)
+	//	}
+	//
+	//	if resource == nil {
+	//		resource = &ctypes.ResourcesStatistics{}
+	//	}
+	//
+	//	location := &model.Location{}
+	//	res = append(res, result{
+	//		ID:         string(provider.ID),
+	//		IP:         provider.IP,
+	//		State:      ctypes.ProviderStateString(provider.State),
+	//		RemoteAddr: provider.RemoteAddr,
+	//		CPU:        fmt.Sprintf("%.1f/%.1f", resource.CPUCores.Available, resource.CPUCores.MaxCPUCores),
+	//		Memory:     fmt.Sprintf("%s/%s", units.BytesSize(float64(resource.Memory.Available)), units.BytesSize(float64(resource.Memory.MaxMemory))),
+	//		Storage:    fmt.Sprintf("%s/%s", units.BytesSize(float64(resource.Storage.Available)), units.BytesSize(float64(resource.Storage.MaxStorage))),
+	//		Region:     fmt.Sprintf("%s %s", location.Country, location.City),
+	//	})
+	//}
+	////
+	////var out []*result
+	//
+	//c.JSON(http.StatusOK, respJSON(JsonObject{
+	//	"total":     30,
+	//	"providers": res,
+	//}))
+}
+
+func syncQueryResource(ctx context.Context, scheduler *Scheduler, providers []*ctypes.Provider) ([]*model.ProviderWithResource, error) {
+	var ch = make(chan *model.ProviderWithResource, 1)
+	var out []*model.ProviderWithResource
+
+	for _, provider := range providers {
+		r := model.ProviderWithResource{
+			ID:         string(provider.ID),
+			Ip:         provider.IP,
+			State:      int32(provider.State),
+			RemoteAddr: provider.RemoteAddr,
+			AreaID:     scheduler.AreaId,
+		}
+
+		go func(res *model.ProviderWithResource) {
+			resource, err := scheduler.Api.GetStatistics(context.Background(), provider.ID)
+			if err != nil {
+				log.Errorf("get statistics: %v", err)
+			}
+
+			if resource == nil {
+				resource = &ctypes.ResourcesStatistics{}
+			}
+
+			res.Cpu = fmt.Sprintf("%.1f/%.1f", resource.CPUCores.Available, resource.CPUCores.MaxCPUCores)
+			res.Memory = fmt.Sprintf("%s/%s", units.BytesSize(float64(resource.Memory.Available)), units.BytesSize(float64(resource.Memory.MaxMemory)))
+			res.Storage = fmt.Sprintf("%s/%s", units.BytesSize(float64(resource.Storage.Available)), units.BytesSize(float64(resource.Storage.MaxStorage)))
+
+			ch <- res
+		}(&r)
+	}
+
+	for {
+		select {
+		case res := <-ch:
+			out = append(out, res)
+
+			if len(out) == len(providers) {
+				return out, nil
+			}
+		}
+	}
+
 }
 
 func GetDeploymentsHandler(c *gin.Context) {
 	claims := jwt.ExtractClaims(c)
 	username := claims[identityKey].(string)
 
-	url := config.Cfg.ContainerManager.Addr
+	areaId := c.Query("area_id")
 	page, _ := strconv.ParseInt(c.Query("page"), 10, 64)
 	size, _ := strconv.ParseInt(c.Query("size"), 10, 64)
 
-	params := ctypes.GetDeploymentOption{
+	option := &ctypes.GetDeploymentOption{
 		Owner: username,
 		Page:  int(page),
 		Size:  int(size),
 	}
 
-	resp, err := getDeploymentsJsonRPC(url, params)
+	scheduler, err := GetSchedulerByAreaId(areaId)
 	if err != nil {
-		log.Errorf("get deployments: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
 
-	//type result struct {
-	//	ID          string  `json:"id"`
-	//	Name        string  `json:"name"`
-	//	Image       string  `json:"image"`
-	//	State       string  `json:"state"`
-	//	Total       int     `json:"total"`
-	//	Ready       int     `json:"ready"`
-	//	Available   int     `json:"available"`
-	//	CPU         float64 `json:"cpu"`
-	//	GPU         float64 `json:"gpu"`
-	//	Memory      string  `json:"memory"`
-	//	Storage     string  `json:"storage"`
-	//	Provider    string  `json:"provider"`
-	//	Port        string  `json:"port"`
-	//	CreatedTime string  `json:"created_time"`
-	//}
-	//
-	//out := make([]ctypes.GetDeploymentListResp, 0)
-	//
-	//for _, deployment := range resp.Deployments {
-	//	for _, service := range deployment.Services {
-	//		state := ctypes.DeploymentStateInActive
-	//		if service.Status.TotalReplicas == service.Status.ReadyReplicas {
-	//			state = ctypes.DeploymentStateActive
-	//		}
-	//
-	//		var exposePorts []string
-	//		for _, port := range service.Ports {
-	//			exposePorts = append(exposePorts, fmt.Sprintf("%d->%d", port.Port, port.ExposePort))
-	//		}
-	//
-	//		var storageSize int64
-	//		for _, storage := range service.Storage {
-	//			storageSize += storage.Quantity
-	//		}
-	//
-	//		out = append(out, result{
-	//			ID:          string(deployment.ID),
-	//			Name:        deployment.Name,
-	//			Image:       service.Image,
-	//			State:       ctypes.DeploymentStateString(state),
-	//			Total:       service.Status.TotalReplicas,
-	//			Ready:       service.Status.ReadyReplicas,
-	//			Available:   service.Status.AvailableReplicas,
-	//			CPU:         service.CPU,
-	//			Memory:      units.BytesSize(float64(service.Memory * units.MiB)),
-	//			Storage:     units.BytesSize(float64(storageSize * units.MiB)),
-	//			Provider:    string(deployment.ProviderID),
-	//			Port:        strings.Join(exposePorts, " "),
-	//			CreatedTime: deployment.CreatedAt.Format(time.DateTime),
-	//		})
-	//	}
-	//}
+	resp, err := scheduler.Api.GetDeploymentList(c.Request.Context(), option)
+	if err != nil {
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		return
+	}
+
+	for _, deployment := range resp.Deployments {
+		for _, service := range deployment.Services {
+			fmt.Println("->", service.Ports)
+		}
+	}
 
 	c.JSON(http.StatusOK, respJSON(resp))
 }
@@ -161,20 +223,32 @@ func GetDeploymentManifestHandler(c *gin.Context) {
 	claims := jwt.ExtractClaims(c)
 	username := claims[identityKey].(string)
 
-	url := config.Cfg.ContainerManager.Addr
+	areaId := c.Query("area_id")
 	deploymentId := c.Query("id")
 
-	params := ctypes.GetDeploymentOption{
+	option := &ctypes.GetDeploymentOption{
 		Owner:        username,
 		DeploymentID: ctypes.DeploymentID(deploymentId),
 	}
 
-	resp, err := getDeploymentsJsonRPC(url, params)
+	scheduler, err := GetSchedulerByAreaId(areaId)
 	if err != nil {
-		log.Errorf("get providers: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
+
+	resp, err := scheduler.Api.GetDeploymentList(c.Request.Context(), option)
+	if err != nil {
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		return
+	}
+
+	//resp, err := getDeploymentsJsonRPC(url, params)
+	//if err != nil {
+	//	log.Errorf("get providers: %v", err)
+	//	c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+	//	return
+	//}
 
 	c.JSON(http.StatusOK, respJSON(JsonObject{
 		"deployment": resp.Deployments[0],
@@ -185,7 +259,12 @@ func CreateDeploymentHandler(c *gin.Context) {
 	claims := jwt.ExtractClaims(c)
 	username := claims[identityKey].(string)
 
-	var deployment ctypes.Deployment
+	type createParams struct {
+		ctypes.Deployment
+		AreaId string
+	}
+
+	var deployment createParams
 	err := c.BindJSON(&deployment)
 	if err != nil {
 		log.Errorf("%v", err)
@@ -194,8 +273,15 @@ func CreateDeploymentHandler(c *gin.Context) {
 	}
 
 	deployment.Owner = username
-	url := config.Cfg.ContainerManager.Addr
-	err = createDeploymentsJsonRPC(url, deployment)
+	//areaId := c.Query("area_id")
+
+	scheduler, err := GetSchedulerByAreaId(deployment.AreaId)
+	if err != nil {
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		return
+	}
+
+	err = scheduler.Api.CreateDeployment(c.Request.Context(), &deployment.Deployment)
 	if err != nil {
 		if strings.Contains(err.Error(), "invalid") {
 			c.JSON(http.StatusOK, respError(errors.ErrInvalidDeploymentName))
@@ -203,7 +289,7 @@ func CreateDeploymentHandler(c *gin.Context) {
 		}
 
 		log.Errorf("create deployment: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
 
@@ -214,19 +300,32 @@ func DeleteDeploymentHandler(c *gin.Context) {
 	claims := jwt.ExtractClaims(c)
 	username := claims[identityKey].(string)
 
-	var deployment ctypes.Deployment
-	if err := c.BindJSON(&deployment); err != nil {
+	type deleteReq struct {
+		Id     string `json:"id"`
+		AreaId string `json:"area_id"`
+	}
+
+	var req deleteReq
+	if err := c.BindJSON(&req); err != nil {
 		log.Errorf("%v", err)
 		c.JSON(http.StatusBadRequest, respError(errors.ErrInvalidParams))
 		return
 	}
 
-	deployment.Owner = username
-	url := config.Cfg.ContainerManager.Addr
-	err := deleteDeploymentsJsonRPC(url, deployment)
+	scheduler, err := GetSchedulerByAreaId(req.AreaId)
+	if err != nil {
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		return
+	}
+
+	deployment := &ctypes.Deployment{
+		ID:    ctypes.DeploymentID(req.Id),
+		Owner: username,
+	}
+	err = scheduler.Api.CloseDeployment(c.Request.Context(), deployment, true)
 	if err != nil {
 		log.Errorf("delete deployment: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
 
@@ -237,19 +336,32 @@ func UpdateDeploymentHandler(c *gin.Context) {
 	claims := jwt.ExtractClaims(c)
 	username := claims[identityKey].(string)
 
-	var deployment ctypes.Deployment
-	if err := c.BindJSON(&deployment); err != nil {
+	type updateReq struct {
+		ctypes.Deployment
+		AreaId string
+	}
+
+	var req updateReq
+	if err := c.BindJSON(&req); err != nil {
 		log.Errorf("%v", err)
 		c.JSON(http.StatusBadRequest, respError(errors.ErrInvalidParams))
 		return
 	}
 
-	deployment.Owner = username
-	url := config.Cfg.ContainerManager.Addr
-	err := updateDeploymentsJsonRPC(url, deployment)
+	req.Owner = username
+
+	fmt.Printf("%+v\n", req)
+
+	scheduler, err := GetSchedulerByAreaId(req.AreaId)
+	if err != nil {
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		return
+	}
+
+	err = scheduler.Api.UpdateDeployment(c.Request.Context(), &req.Deployment)
 	if err != nil {
 		log.Errorf("update deployment: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
 
@@ -259,8 +371,9 @@ func UpdateDeploymentHandler(c *gin.Context) {
 func GetDeploymentLogsHandler(c *gin.Context) {
 	claims := jwt.ExtractClaims(c)
 	username := claims[identityKey].(string)
+	areaId := c.Query("area_id")
 
-	url := config.Cfg.ContainerManager.Addr
+	//url := config.Cfg.ContainerManager.Addr
 	deploymentId := c.Query("id")
 
 	params := ctypes.Deployment{
@@ -270,11 +383,18 @@ func GetDeploymentLogsHandler(c *gin.Context) {
 
 	logs := make([]*ctypes.ServiceLog, 0)
 
-	events, err := getDeploymentEventsJsonRPC(url, params)
+	scheduler, err := GetSchedulerByAreaId(areaId)
 	if err != nil {
-		log.Errorf("get events: %v", err)
-		//c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		return
+	}
+
+	events, err := scheduler.Api.GetEvents(c.Request.Context(), &params)
+	if err != nil {
+		log.Errorf("get event: %v", err)
+		//c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		//return
+		events = []*ctypes.ServiceEvent{{Events: []ctypes.Event{ctypes.Event(err.Error())}}}
 	}
 
 	for _, event := range events {
@@ -287,11 +407,12 @@ func GetDeploymentLogsHandler(c *gin.Context) {
 		logs = append(logs, l)
 	}
 
-	slogs, err := getDeploymentLogsJsonRPC(url, params)
+	slogs, err := scheduler.Api.GetLogs(c.Request.Context(), &params)
 	if err != nil {
 		log.Errorf("get logs: %v", err)
-		//c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		//c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		//return
+		slogs = []*ctypes.ServiceLog{{Logs: []ctypes.Log{ctypes.Log(err.Error())}}}
 	}
 
 	logs = append(logs, slogs...)
@@ -305,7 +426,7 @@ func GetDeploymentEventsHandler(c *gin.Context) {
 	claims := jwt.ExtractClaims(c)
 	username := claims[identityKey].(string)
 
-	url := config.Cfg.ContainerManager.Addr
+	areaId := c.Query("area_id")
 	deploymentId := c.Query("id")
 
 	params := ctypes.Deployment{
@@ -313,10 +434,16 @@ func GetDeploymentEventsHandler(c *gin.Context) {
 		ID:    ctypes.DeploymentID(deploymentId),
 	}
 
-	logs, err := getDeploymentEventsJsonRPC(url, params)
+	scheduler, err := GetSchedulerByAreaId(areaId)
 	if err != nil {
-		log.Errorf("get events: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		return
+	}
+
+	logs, err := scheduler.Api.GetLogs(c.Request.Context(), &params)
+	if err != nil {
+		log.Errorf("get logs: %v", err)
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
 
@@ -326,15 +453,23 @@ func GetDeploymentEventsHandler(c *gin.Context) {
 }
 
 func GetDeploymentDomainHandler(c *gin.Context) {
-	url := config.Cfg.ContainerManager.Addr
+	//url := config.Cfg.ContainerManager.Addr
 	deploymentId := c.Query("id")
+	areaId := c.Query("area_id")
 
 	out := make([]*ctypes.DeploymentDomain, 0)
-	domains, err := getDeploymentDomainJsonRPC(url, ctypes.DeploymentID(deploymentId))
-	if err != nil && !strings.Contains(err.Error(), "not found") {
-		log.Errorf("get domains: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+
+	scheduler, err := GetSchedulerByAreaId(areaId)
+	if err != nil {
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
+	}
+
+	domains, err := scheduler.Api.GetDeploymentDomains(c.Request.Context(), ctypes.DeploymentID(deploymentId))
+	if err != nil {
+		log.Errorf("get domain: %v", err)
+		//c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		//return
 	}
 
 	out = append(out, domains...)
@@ -344,7 +479,8 @@ func GetDeploymentDomainHandler(c *gin.Context) {
 }
 
 func AddDeploymentDomainHandler(c *gin.Context) {
-	url := config.Cfg.ContainerManager.Addr
+	//url := config.Cfg.ContainerManager.Addr
+	areaId := c.Query("area_id")
 	claims := jwt.ExtractClaims(c)
 	username := claims[identityKey].(string)
 
@@ -367,10 +503,16 @@ func AddDeploymentDomainHandler(c *gin.Context) {
 		DeploymentID: params.ID,
 	}
 
-	resp, err := getDeploymentsJsonRPC(url, dparam)
+	scheduler, err := GetSchedulerByAreaId(areaId)
 	if err != nil {
-		log.Errorf("get providers: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		return
+	}
+
+	resp, err := scheduler.Api.GetDeploymentList(c.Request.Context(), &dparam)
+	if err != nil {
+		log.Errorf("get deployment: %v", err)
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
 
@@ -390,10 +532,10 @@ func AddDeploymentDomainHandler(c *gin.Context) {
 		Certificate: []byte(params.Certificate),
 	}
 
-	err = addDeploymentDomainJsonRPC(url, params.ID, cert)
-	if err != nil && !strings.Contains(err.Error(), "not found") {
-		log.Errorf("add domains: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+	err = scheduler.Api.AddDeploymentDomain(c.Request.Context(), params.ID, cert)
+	if err != nil {
+		log.Errorf("add domain: %v", err)
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
 
@@ -404,7 +546,7 @@ func DeleteDeploymentDomainHandler(c *gin.Context) {
 	claims := jwt.ExtractClaims(c)
 	username := claims[identityKey].(string)
 
-	url := config.Cfg.ContainerManager.Addr
+	areaId := c.Query("area_id")
 	deploymentId := c.Query("id")
 	host := c.Query("host")
 
@@ -413,10 +555,16 @@ func DeleteDeploymentDomainHandler(c *gin.Context) {
 		DeploymentID: ctypes.DeploymentID(deploymentId),
 	}
 
-	resp, err := getDeploymentsJsonRPC(url, dparam)
+	scheduler, err := GetSchedulerByAreaId(areaId)
 	if err != nil {
-		log.Errorf("get providers: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		return
+	}
+
+	resp, err := scheduler.Api.GetDeploymentList(c.Request.Context(), &dparam)
+	if err != nil {
+		log.Errorf("get deployment: %v", err)
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
 
@@ -430,10 +578,11 @@ func DeleteDeploymentDomainHandler(c *gin.Context) {
 		return
 	}
 
-	err = deleteDeploymentDomainJsonRPC(url, ctypes.DeploymentID(deploymentId), host)
-	if err != nil && !strings.Contains(err.Error(), "not found") {
-		log.Errorf("delete domains: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+	//}
+	err = scheduler.Api.DeleteDeploymentDomain(c.Request.Context(), ctypes.DeploymentID(deploymentId), host)
+	if err != nil {
+		log.Errorf("delete domain: %v", err)
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
 
@@ -443,8 +592,7 @@ func DeleteDeploymentDomainHandler(c *gin.Context) {
 func GetDeploymentShellHandler(c *gin.Context) {
 	claims := jwt.ExtractClaims(c)
 	username := claims[identityKey].(string)
-
-	url := config.Cfg.ContainerManager.Addr
+	areaId := c.Query("area_id")
 	deploymentId := c.Query("id")
 
 	params := ctypes.GetDeploymentOption{
@@ -452,10 +600,16 @@ func GetDeploymentShellHandler(c *gin.Context) {
 		DeploymentID: ctypes.DeploymentID(deploymentId),
 	}
 
-	resp, err := getDeploymentsJsonRPC(url, params)
+	scheduler, err := GetSchedulerByAreaId(areaId)
 	if err != nil {
-		log.Errorf("get providers: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		return
+	}
+
+	resp, err := scheduler.Api.GetDeploymentList(c.Request.Context(), &params)
+	if err != nil {
+		log.Errorf("get deployment: %v", err)
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
 
@@ -469,15 +623,15 @@ func GetDeploymentShellHandler(c *gin.Context) {
 		return
 	}
 
-	shell, err := getDeploymentShellJsonRPC(url, ctypes.DeploymentID(deploymentId))
-	if err != nil && !strings.Contains(err.Error(), "not found") {
-		log.Errorf("get shell: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+	leaseEndpoint, err := scheduler.Api.GetLeaseShellEndpoint(c.Request.Context(), ctypes.DeploymentID(deploymentId))
+	if err != nil {
+		log.Errorf("get deployment: %v", err)
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
 
 	c.JSON(http.StatusOK, respJSON(JsonObject{
-		"shell": shell,
+		"endpoint": leaseEndpoint,
 	}))
 }
 
@@ -485,7 +639,7 @@ func GetIngressHandler(c *gin.Context) {
 	claims := jwt.ExtractClaims(c)
 	username := claims[identityKey].(string)
 
-	url := config.Cfg.ContainerManager.Addr
+	areaId := c.Query("area_id")
 	deploymentId := c.Query("id")
 
 	dparam := ctypes.GetDeploymentOption{
@@ -493,10 +647,16 @@ func GetIngressHandler(c *gin.Context) {
 		DeploymentID: ctypes.DeploymentID(deploymentId),
 	}
 
-	resp, err := getDeploymentsJsonRPC(url, dparam)
+	scheduler, err := GetSchedulerByAreaId(areaId)
 	if err != nil {
-		log.Errorf("get providers: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		return
+	}
+
+	resp, err := scheduler.Api.GetDeploymentList(c.Request.Context(), &dparam)
+	if err != nil {
+		log.Errorf("get deployment: %v", err)
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
 
@@ -505,11 +665,11 @@ func GetIngressHandler(c *gin.Context) {
 		return
 	}
 
-	ingress, err := getIngressJsonRPC(url, ctypes.DeploymentID(deploymentId))
+	ingress, err := scheduler.Api.GetIngress(c.Request.Context(), ctypes.DeploymentID(deploymentId))
 	if err != nil {
-		log.Errorf("get events: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
-		return
+		log.Errorf("get ingress: %v", err)
+		//c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		//return
 	}
 
 	c.JSON(http.StatusOK, respJSON(JsonObject{
@@ -521,8 +681,9 @@ func UpdateIngressHandler(c *gin.Context) {
 	claims := jwt.ExtractClaims(c)
 	username := claims[identityKey].(string)
 
-	url := config.Cfg.ContainerManager.Addr
+	//url := config.Cfg.ContainerManager.Addr
 	deploymentId := c.Query("id")
+	areaId := c.Query("area_id")
 
 	var ingress ctypes.Ingress
 	if err := c.Bind(&ingress); err != nil {
@@ -536,10 +697,16 @@ func UpdateIngressHandler(c *gin.Context) {
 		DeploymentID: ctypes.DeploymentID(deploymentId),
 	}
 
-	resp, err := getDeploymentsJsonRPC(url, dparam)
+	scheduler, err := GetSchedulerByAreaId(areaId)
 	if err != nil {
-		log.Errorf("get providers: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
+		return
+	}
+
+	resp, err := scheduler.Api.GetDeploymentList(c.Request.Context(), &dparam)
+	if err != nil {
+		log.Errorf("get deployment: %v", err)
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
 
@@ -548,10 +715,10 @@ func UpdateIngressHandler(c *gin.Context) {
 		return
 	}
 
-	err = updateIngressJsonRPC(url, ctypes.DeploymentID(deploymentId), ingress.Annotations)
+	err = scheduler.Api.UpdateIngress(c.Request.Context(), ctypes.DeploymentID(deploymentId), ingress.Annotations)
 	if err != nil {
-		log.Errorf("get ingress: %v", err)
-		c.JSON(http.StatusOK, respError(errors.ErrInternalServer))
+		log.Errorf("update ingress: %v", err)
+		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
 	}
 
