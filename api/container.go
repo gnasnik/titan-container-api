@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func GetAreasHandler(c *gin.Context) {
@@ -31,8 +32,9 @@ func GetProvidersHandler(c *gin.Context) {
 	areaId := c.Query("area_id")
 	page, _ := strconv.ParseInt(c.Query("page"), 10, 64)
 	size, _ := strconv.ParseInt(c.Query("size"), 10, 64)
+	providerId := c.Query("provider_id")
 
-	total, providers, err := dao.GetProvidersWithResource(c.Request.Context(), areaId, model.QueryOption{Page: int(page), Size: int(size)})
+	total, providers, err := dao.GetProvidersWithResource(c.Request.Context(), areaId, model.QueryOption{Page: int(page), Size: int(size), ID: providerId})
 	if err != nil {
 		log.Errorf("GetProvidersWithResource: %v", err)
 		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
@@ -146,15 +148,16 @@ func syncQueryResource(ctx context.Context, scheduler *Scheduler, providers []*c
 
 	for _, provider := range providers {
 		r := model.ProviderWithResource{
-			ID:         string(provider.ID),
+			ID:         provider.ID,
 			Ip:         provider.IP,
 			State:      int32(provider.State),
 			RemoteAddr: provider.RemoteAddr,
 			AreaID:     scheduler.AreaId,
+			CreatedAt:  time.Now(),
 		}
 
 		go func(res *model.ProviderWithResource) {
-			resource, err := scheduler.Api.GetStatistics(context.Background(), provider.ID)
+			resource, err := scheduler.Api.GetStatistics(context.Background(), res.ID)
 			if err != nil {
 				log.Errorf("get statistics: %v", err)
 			}
@@ -208,12 +211,6 @@ func GetDeploymentsHandler(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusOK, respErrorWrapMessage(errors.ErrInternalServer, err.Error()))
 		return
-	}
-
-	for _, deployment := range resp.Deployments {
-		for _, service := range deployment.Services {
-			fmt.Println("->", service.Ports)
-		}
 	}
 
 	c.JSON(http.StatusOK, respJSON(resp))

@@ -18,6 +18,8 @@ func (s *Syncer) run(ctx context.Context) {
 	interval := 10 * time.Minute
 	ticker := time.NewTicker(interval)
 
+	//s.updateProviders(ctx)
+
 	for {
 		select {
 		case <-ticker.C:

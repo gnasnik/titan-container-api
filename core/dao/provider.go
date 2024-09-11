@@ -20,7 +20,7 @@ func AddNewProvider(ctx context.Context, provider *types.Provider) error {
 func AddProviderWithResource(ctx context.Context, provider []*model.ProviderWithResource) error {
 	qry := `INSERT INTO provider_with_res (id, area_id, remote_addr, ip, state, cpu, gpu, memory, storage, created_at) 
 		        VALUES (:id, :area_id, :remote_addr, :ip, :state, :cpu, :gpu, :memory, :storage,:created_at) ON DUPLICATE KEY UPDATE  area_id = values(area_id), remote_addr=values(remote_addr), 
-		            ip=values(ip), state=values(state)`
+		            ip=values(ip), state=values(state),  cpu = values(cpu), gpu = values(gpu), memory = values(memory), storage = values(storage), created_at = values(created_at)`
 	_, err := DB.NamedExecContext(ctx, qry, provider)
 
 	return err

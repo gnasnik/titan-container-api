@@ -46,7 +46,7 @@ type etcdClient struct {
 	schedulers []*Scheduler
 }
 
-func newEtcdClient(user, password string, addresses []string) (*etcdClient, error) {
+func NewEtcdClient(user, password string, addresses []string) (*etcdClient, error) {
 	os.Setenv("ETCD_USERNAME", user)
 	os.Setenv("ETCD_PASSWORD", password)
 
@@ -116,7 +116,7 @@ func (s *Server) watchEtcdSchedulerConfig(ctx context.Context) {
 			switch event.Type {
 			case mvccpb.DELETE, mvccpb.PUT:
 				log.Infof("Etcd Scheduler config changed")
-				schedulers, err := s.fetchSchedulersFromEtcd(ctx)
+				schedulers, err := FetchSchedulersFromEtcd(ctx, s.etcdClient)
 				if err != nil {
 					log.Errorf("FetchSchedulersFromEtcd: %v", err)
 					continue
@@ -134,8 +134,8 @@ func (s *Server) GetSchedulers() []*Scheduler {
 	return s.etcdClient.getSchedulers()
 }
 
-func (s *Server) fetchSchedulersFromEtcd(ctx context.Context) ([]*Scheduler, error) {
-	schedulerConfigs, err := s.etcdClient.loadSchedulerConfigs()
+func FetchSchedulersFromEtcd(ctx context.Context, etcdClient *etcdClient) ([]*Scheduler, error) {
+	schedulerConfigs, err := etcdClient.loadSchedulerConfigs()
 	if err != nil {
 		log.Errorf("load scheduer from etcd: %v", err)
 		return nil, err
@@ -200,7 +200,7 @@ func NewServer(cfg config.Config) (*Server, error) {
 
 	RegisterRouter(router, cfg)
 
-	ec, err := newEtcdClient(cfg.EtcdUser, cfg.EtcdPassword, cfg.EtcdAddresses)
+	ec, err := NewEtcdClient(cfg.EtcdUser, cfg.EtcdPassword, cfg.EtcdAddresses)
 	if err != nil {
 		log.Errorf("New etcdClient Failed: %v", err)
 		return nil, err
@@ -213,7 +213,7 @@ func NewServer(cfg config.Config) (*Server, error) {
 		syncer:     NewSyncer(),
 	}
 
-	schedulers, err := s.fetchSchedulersFromEtcd(context.Background())
+	schedulers, err := FetchSchedulersFromEtcd(context.Background(), ec)
 	if err != nil {
 		return nil, err
 	}

@@ -1,7 +1,14 @@
 Mode = "debug"
-ApiListen = ":8080"
+ApiListen = ":8082"
 DatabaseURL = "root:1234@tcp(localhost:3306)/titan_container?charset=utf8mb4&parseTime=True&loc=Local"
 SecretKey = "test"
+
+# EtcdAddresses = ["127.0.0.1:2379"]
+
+EtcdAddresses = ["47.236.228.34:2379", "8.211.44.79:2379" , "8.209.205.85:2379" ]
+EtcdUser = "web"
+EtcdPassword = "web_123"
+
 
 [ContainerManager]
    # Addr = "http://39.108.214.29:6123/rpc/v0"
@@ -10,5 +17,9 @@ SecretKey = "test"
     #Token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJBbGxvdyI6WyJyZWFkIiwid3JpdGUiLCJzaWduIiwiYWRtaW4iXX0.p1OdEDVkui_qlzXTQfpXbWrTxzmUMtO0Yw5Revae2sA"
     #Addr = "http://47.76.88.226:6123/rpc/v0"
     #Token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJBbGxvdyI6WyJyZWFkIiwid3JpdGUiLCJzaWduIiwicHJvdmlkZXIiLCJhZG1pbiJdfQ.OVhFYuEVaB7A2P4Tbmt1WKtLgmo2scuz3YTuYaQqwqc"
-    Addr = "http://127.0.0.1:3456/rpc/v0"
-    Token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJBbGxvdyI6WyJ3ZWIiLCJjYW5kaWRhdGUiLCJlZGdlIiwibG9jYXRvciIsImFkbWluIiwiZGVmYXVsdCIsInVzZXIiXX0.Mn8cG1lW-T_u4D53MeyAhHjh5vAQisJ-4bWpz5pku-g"
+    #Addr = "http://127.0.0.1:3456/rpc/v0"
+   # Token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJBbGxvdyI6WyJ3ZWIiLCJjYW5kaWRhdGUiLCJlZGdlIiwibG9jYXRvciIsImFkbWluIiwiZGVmYXVsdCIsInVzZXIiXX0.Mn8cG1lW-T_u4D53MeyAhHjh5vAQisJ-4bWpz5pku-g"
+    #Addr = "http://47.76.90.154:3456/rpc/v0"
+    #Token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJBbGxvdyI6WyJ3ZWIiLCJjYW5kaWRhdGUiLCJlZGdlIiwibG9jYXRvciIsImFkbWluIiwiZGVmYXVsdCIsInVzZXIiXX0.TRUQedZanqjD9rn95mo0-tfCCqExb3f-j1z207wJWSw"
+    Addr = "http://47.238.234.139:3456/rpc/v0"
+    Token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJBbGxvdyI6WyJ3ZWIiLCJjYW5kaWRhdGUiLCJlZGdlIiwibG9jYXRvciIsImFkbWluIiwiZGVmYXVsdCIsInVzZXIiXX0.RyeJZDAAcjSqIuuB-jPGs2vYuoVKL8Alhx9Mf5wgxek"
